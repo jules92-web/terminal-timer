@@ -40,7 +40,7 @@ if POMO:
         (25*60, "WORK"), (5*60, "BREAK"),
         (25*60, "WORK"), (5*60, "BREAK"),
         (25*60, "WORK"), (5*60, "BREAK"),
-        (25*60, "WORK"), (15*60, "LONG BREAK"),
+        (25*60, "WORK"), (30*60, "LONG BREAK"),
     ]
 else:
     d = parse_duration(sys.argv[1])
@@ -60,7 +60,6 @@ if not os.environ.get("_TIMER_BG"):
 os.makedirs(PID_DIR, exist_ok=True)
 pid_file = f"{PID_DIR}/{os.getpid()}"
 open(pid_file, "w").close()
-atexit.register(lambda: os.path.exists(pid_file) and os.remove(pid_file))
 
 from PyQt6.QtWidgets import QApplication, QWidget, QLabel, QGraphicsDropShadowEffect
 from PyQt6.QtCore import Qt, QTimer, QPoint, QRectF
@@ -112,7 +111,7 @@ class TimerWindow(QWidget):
         close.setFont(QFont("Helvetica", 10))
         close.setStyleSheet("color: #333333;")
         close.setCursor(Qt.CursorShape.PointingHandCursor)
-        close.mousePressEvent = lambda e: self.close()
+        close.mousePressEvent = lambda e: QTimer.singleShot(0, self.close)
         close.enterEvent = lambda e: close.setStyleSheet("color: #888888;")
         close.leaveEvent = lambda e: close.setStyleSheet("color: #333333;")
 
@@ -187,6 +186,10 @@ class TimerWindow(QWidget):
 
         p.end()
 
+    def closeEvent(self, event):
+        self.ticker.stop()
+        event.accept()
+
     def mousePressEvent(self, e):
         if e.button() == Qt.MouseButton.LeftButton:
             self._drag = e.globalPosition().toPoint() - self.frameGeometry().topLeft()
@@ -198,4 +201,11 @@ class TimerWindow(QWidget):
 app = QApplication(sys.argv)
 win = TimerWindow()
 win.show()
-sys.exit(app.exec())
+app.exec()
+try:
+    if os.path.exists(pid_file):
+        os.remove(pid_file)
+except OSError:
+    pass
+del win
+del app
