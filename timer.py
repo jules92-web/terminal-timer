@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, subprocess, glob, atexit
+import sys, os, subprocess, glob, atexit, time
 
 PID_DIR   = "/tmp/timer_pids"
 FONT_PATH = os.path.expanduser("~/Library/Fonts/DSEG7Classic-Regular.ttf")
@@ -111,7 +111,13 @@ class TimerWindow(QWidget):
         close.setFont(QFont("Helvetica", 10))
         close.setStyleSheet("color: #333333;")
         close.setCursor(Qt.CursorShape.PointingHandCursor)
-        close.mousePressEvent = lambda e: QTimer.singleShot(0, self.close)
+        def _close(e):
+            try:
+                os.remove(pid_file)
+            except OSError:
+                pass
+            os._exit(0)
+        close.mousePressEvent = _close
         close.enterEvent = lambda e: close.setStyleSheet("color: #888888;")
         close.leaveEvent = lambda e: close.setStyleSheet("color: #333333;")
 
@@ -126,9 +132,10 @@ class TimerWindow(QWidget):
 
     def load_cycle(self, idx):
         dur, phase = self.cycles[idx]
-        self.remaining = dur
-        self.total     = dur
-        self.progress  = 1.0
+        self.remaining  = dur
+        self.total      = dur
+        self.progress   = 1.0
+        self.start_time = time.monotonic()
 
         key = "LONG BREAK" if "LONG" in phase.upper() else \
               "BREAK"      if "BREAK" in phase.upper() else \
@@ -147,14 +154,17 @@ class TimerWindow(QWidget):
 
         self.time_lbl.setText(fmt(dur))
         self.update()
+        self.ticker.start(1000)
 
     def tick(self):
-        self.remaining -= 1
+        elapsed = time.monotonic() - self.start_time
+        self.remaining = max(0, self.total - int(elapsed))
         self.progress = self.remaining / self.total
         self.time_lbl.setText(fmt(self.remaining))
         self.update()
 
         if self.remaining == 0:
+            self.ticker.stop()
             subprocess.Popen(["afplay", "/System/Library/Sounds/Glass.aiff"])
             nxt = self.cycle_idx + 1
             if nxt < len(self.cycles):
@@ -207,5 +217,3 @@ try:
         os.remove(pid_file)
 except OSError:
     pass
-del win
-del app
